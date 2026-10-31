@@ -100,6 +100,13 @@ func ParseListener(mapping map[string]any) (C.InboundListener, error) {
 			return nil, err
 		}
 		listener, err = IN.NewVless(vlessOption)
+	case "vless-reverse":
+		reverseOption := &IN.VlessReverseOption{}
+		err = decoder.Decode(mapping, reverseOption)
+		if err != nil {
+			return nil, err
+		}
+		listener, err = IN.NewVlessReverse(reverseOption)
 	case "trojan":
 		trojanOption := &IN.TrojanOption{}
 		err = decoder.Decode(mapping, trojanOption)

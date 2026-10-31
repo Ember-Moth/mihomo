@@ -65,3 +65,18 @@ jobs:
 
       - name: Test with tag with_gvisor
         run: go test ./... -v -count=1 -tags "with_gvisor"
+
+      - name: Test VLESS Reverse against Xray
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+        env:
+          CGO_ENABLED: 1
+          SKIP_INTEROP_TEST: 0
+        run: |
+          archive="$RUNNER_TEMP/xray-v26.10.31.zip"
+          binary_dir="$RUNNER_TEMP/xray-vless-reverse"
+          curl --fail --location --retry 3 https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip --output "$archive"
+          printf '%s  %s\n' e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214 "$archive" | sha256sum --check
+          mkdir -p "$binary_dir"
+          unzip -o "$archive" xray -d "$binary_dir"
+          chmod +x "$binary_dir/xray"
+          XRAY_TEST_BINARY="$binary_dir/xray" go test -race ./transport/gun ./transport/vless/... ./listener/sing_vless ./listener/inbound -run 'TestReverse|TestVlessReverse|TestConn|TestVisionResponseHeadroomConcurrent' -count=1 -timeout=3m

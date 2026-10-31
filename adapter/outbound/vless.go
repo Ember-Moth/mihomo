@@ -153,6 +153,10 @@ type XHTTPDownloadSettings struct {
 }
 
 func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (_ net.Conn, err error) {
+	return v.wrapStreamConnContext(ctx, c, metadata, false)
+}
+
+func (v *Vless) wrapStreamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata, reverse bool) (_ net.Conn, err error) {
 	switch v.option.Network {
 	case "ws":
 		host, port, _ := net.SplitHostPort(v.addr)
@@ -265,10 +269,10 @@ func (v *Vless) StreamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		return nil, err
 	}
 
-	return v.streamConnContext(ctx, c, metadata)
+	return v.streamConnContext(ctx, c, metadata, reverse)
 }
 
-func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata) (conn net.Conn, err error) {
+func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.Metadata, reverse bool) (conn net.Conn, err error) {
 	if ctx.Done() != nil {
 		done := N.SetupContextForConn(ctx, c)
 		defer done(&err)
@@ -279,7 +283,9 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 			return
 		}
 	}
-	if metadata.NetWork == C.UDP {
+	if reverse {
+		conn, err = v.client.StreamConn(c, &vless.DstAddr{Reverse: true})
+	} else if metadata.NetWork == C.UDP {
 		if v.option.PacketAddr {
 			metadata = &C.Metadata{
 				NetWork: C.UDP,
@@ -301,6 +307,24 @@ func (v *Vless) streamConnContext(ctx context.Context, c net.Conn, metadata *C.M
 		conn = nil
 	}
 	return
+}
+
+// DialReverseContext opens a VLESS command 0x04 transport. The reverse listener
+// owns reconnection and dispatches the peer's Mux requests as inbound traffic.
+func (v *Vless) DialReverseContext(ctx context.Context) (_ net.Conn, err error) {
+	c, err := v.dialContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func(raw net.Conn) { safeConnClose(raw, err) }(c)
+	c, err = v.wrapStreamConnContext(ctx, c, &C.Metadata{NetWork: C.TCP}, true)
+	if err != nil {
+		return nil, err
+	}
+	done := N.SetupContextForConn(ctx, c)
+	defer done(&err)
+	_, err = c.Write(nil)
+	return c, err
 }
 
 func (v *Vless) streamTLSConn(ctx context.Context, conn net.Conn, isH2 bool) (net.Conn, error) {

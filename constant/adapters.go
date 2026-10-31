@@ -56,6 +56,7 @@ const (
 	EasyTier
 	GostRelay
 	Naive
+	VlessReverse
 )
 
 const (
@@ -211,6 +212,8 @@ func (at AdapterType) String() string {
 		return "Vmess"
 	case Vless:
 		return "Vless"
+	case VlessReverse:
+		return "VlessReverse"
 	case Trojan:
 		return "Trojan"
 	case Hysteria:

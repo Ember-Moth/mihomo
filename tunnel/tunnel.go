@@ -27,6 +27,7 @@ import (
 	P "github.com/metacubex/mihomo/constant/provider"
 	icontext "github.com/metacubex/mihomo/context"
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/transport/vless/reverse"
 	"github.com/metacubex/mihomo/tunnel/statistic"
 
 	"golang.org/x/exp/slices"
@@ -73,6 +74,16 @@ var (
 type tunnel struct{}
 
 var Tunnel = tunnel{}
+var vlessReverseRegistry = reverse.NewRegistry()
+
+func (t tunnel) VLESSReverseRegistry() *reverse.Registry { return vlessReverseRegistry }
+
+func (t tunnel) ProxyByName(name string) C.Proxy {
+	configMux.RLock()
+	defer configMux.RUnlock()
+	return proxies[name]
+}
+
 var _ C.Tunnel = Tunnel
 var _ P.Tunnel = Tunnel
 var _ proxydialer.Tunnel = Tunnel
@@ -229,9 +240,17 @@ func RuleProviders() map[string]P.RuleProvider {
 // UpdateProxies handle update proxies
 func UpdateProxies(newProxies map[string]C.Proxy, newProviders map[string]P.ProxyProvider) {
 	configMux.Lock()
+	oldProxies := proxies
 	proxies = newProxies
 	providers = newProviders
 	configMux.Unlock()
+	// Reverse tunnels are persistent. Release the previous configuration's
+	// ownership explicitly instead of waiting for closed traffic trackers to GC.
+	for name, proxy := range oldProxies {
+		if proxy.Type() == C.VlessReverse && proxy != newProxies[name] {
+			_ = proxy.Close()
+		}
+	}
 }
 
 func UpdateListeners(newListeners map[string]C.InboundListener) {

@@ -30,9 +30,10 @@ type VlessOption struct {
 }
 
 type VlessUser struct {
-	Username string `inbound:"username,omitempty"`
-	UUID     string `inbound:"uuid"`
-	Flow     string `inbound:"flow,omitempty"`
+	Username string           `inbound:"username,omitempty"`
+	UUID     string           `inbound:"uuid"`
+	Flow     string           `inbound:"flow,omitempty"`
+	Reverse  *LC.VlessReverse `inbound:"reverse,omitempty"`
 }
 
 type XHTTPConfig struct {
@@ -107,7 +108,11 @@ func NewVless(options *VlessOption) (*Vless, error) {
 			Username: v.Username,
 			UUID:     v.UUID,
 			Flow:     v.Flow,
+			Reverse:  v.Reverse,
 		}
+	}
+	if err := LC.ValidateVlessReverseUsers(users); err != nil {
+		return nil, err
 	}
 	return &Vless{
 		Base:   base,
