@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/Ember-Moth/cronet-go v0.0.0-20261103143108-5a29f59dd943
 	github.com/Ember-Moth/cronet-go/all v0.0.0-20261103143108-5a29f59dd943
+	github.com/Ember-Moth/sing-snell v0.0.0-20261103142549-a3b26775de24
 	github.com/bahlo/generic-list-go v0.2.0
 	github.com/coreos/go-iptables v0.8.0
 	github.com/dlclark/regexp2 v1.12.0
@@ -77,7 +78,7 @@ require (
 	golang.org/x/exp v0.0.0-20240904232852-e7e105dedf7e
 	golang.org/x/net v0.48.0
 	golang.org/x/sync v0.19.0
-	golang.org/x/sys v0.39.0
+	golang.org/x/sys v0.41.0
 	google.golang.org/protobuf v1.34.2
 )
 

@@ -65,3 +65,12 @@ jobs:
 
       - name: Test with tag with_gvisor
         run: go test ./... -v -count=1 -tags "with_gvisor"
+
+      - name: Test Snell concurrency and interoperability
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.26'
+        env:
+          CGO_ENABLED: 1
+        run: >-
+          go test -race ./adapter/outbound ./listener/inbound
+          -run 'TestSnell|TestInboundSnell($|UDP|HalfCloseAndReuse|LegacyV4Client|CloseUnblocksHandshake|_ShadowTls|_JLS)'
+          -count=1 -timeout=3m

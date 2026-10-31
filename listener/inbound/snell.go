@@ -12,13 +12,14 @@ import (
 
 type SnellOption struct {
 	BaseOption
-	Psk       string          `inbound:"psk"`
-	Version   int             `inbound:"version,omitempty"`
-	UDP       bool            `inbound:"udp,omitempty"`
-	ObfsOpts  SnellObfsOption `inbound:"obfs-opts,omitempty"`
-	ShadowTLS ShadowTLS       `inbound:"shadow-tls,omitempty"`
-	ResTLS    ResTLS          `inbound:"res-tls,omitempty"`
-	JLSConfig JLSConfig       `inbound:"jls-config,omitempty"`
+	Psk          string          `inbound:"psk"`
+	Version      int             `inbound:"version,omitempty"`
+	Version6Mode string          `inbound:"version6-mode,omitempty"`
+	UDP          bool            `inbound:"udp,omitempty"`
+	ObfsOpts     SnellObfsOption `inbound:"obfs-opts,omitempty"`
+	ShadowTLS    ShadowTLS       `inbound:"shadow-tls,omitempty"`
+	ResTLS       ResTLS          `inbound:"res-tls,omitempty"`
+	JLSConfig    JLSConfig       `inbound:"jls-config,omitempty"`
 }
 
 func (o SnellOption) Equal(config C.InboundConfig) bool {
@@ -45,23 +46,27 @@ func NewSnell(options *SnellOption) (*Snell, error) {
 	if options.Version == 0 {
 		options.Version = 4
 	}
-	if options.Version < 1 || options.Version > 5 {
+	if options.Version < 1 || options.Version > 6 {
 		return nil, fmt.Errorf("snell inbound version %d is not supported", options.Version)
+	}
+	if options.Version6Mode != "" && options.Version != 6 {
+		return nil, fmt.Errorf("snell version6-mode requires version 6")
 	}
 
 	return &Snell{
 		Base:   base,
 		config: options,
 		snell: LC.SnellServer{
-			Listen:    base.RawAddress(),
-			Psk:       options.Psk,
-			Version:   options.Version,
-			UDP:       options.UDP,
-			ObfsMode:  options.ObfsOpts.Mode,
-			ObfsHost:  options.ObfsOpts.Host,
-			ShadowTLS: options.ShadowTLS.Build(),
-			ResTLS:    options.ResTLS.Build(),
-			JLSConfig: options.JLSConfig.Build(),
+			Listen:       base.RawAddress(),
+			Psk:          options.Psk,
+			Version:      options.Version,
+			Version6Mode: options.Version6Mode,
+			UDP:          options.UDP,
+			ObfsMode:     options.ObfsOpts.Mode,
+			ObfsHost:     options.ObfsOpts.Host,
+			ShadowTLS:    options.ShadowTLS.Build(),
+			ResTLS:       options.ResTLS.Build(),
+			JLSConfig:    options.JLSConfig.Build(),
 		},
 	}, nil
 }

@@ -2,6 +2,8 @@ github.com/Ember-Moth/cronet-go v0.0.0-20261103143108-5a29f59dd943 h1:lnvZF1E2xw
 github.com/Ember-Moth/cronet-go v0.0.0-20261103143108-5a29f59dd943/go.mod h1:DIkj7CKGf+kJU50DWjU3MI0BA4OJJOEgrCEfQm4Wygs=
 github.com/Ember-Moth/cronet-go/all v0.0.0-20261103143108-5a29f59dd943 h1:PbN61cU+X6NLdvhSJTntjROHH0CdP5tw4QZp0+OIQ9s=
 github.com/Ember-Moth/cronet-go/all v0.0.0-20261103143108-5a29f59dd943/go.mod h1:75TQVb4V/SnmEZY0vEMAAb/9hNwIvrviTVDOLg2qarI=
+github.com/Ember-Moth/sing-snell v0.0.0-20261103142549-a3b26775de24 h1:EWy0A+z6AYNZrENrSe1Ey+fn91bKuDWhDkMN5PCfhIY=
+github.com/Ember-Moth/sing-snell v0.0.0-20261103142549-a3b26775de24/go.mod h1:T4y99RwtnjOj0Ik1LHmu8OPzN/hgKTgvxEQ9qerWvBI=
 github.com/RyuaNerin/go-krypto v1.3.0 h1:smavTzSMAx8iuVlGb4pEwl9MD2qicqMzuXR2QWp2/Pg=
 github.com/RyuaNerin/go-krypto v1.3.0/go.mod h1:9R9TU936laAIqAmjcHo/LsaXYOZlymudOAxjaBf62UM=
 github.com/RyuaNerin/testingutil v0.1.0 h1:IYT6JL57RV3U2ml3dLHZsVtPOP6yNK7WUVdzzlpNrss=
@@ -389,8 +391,8 @@ golang.org/x/sys v0.0.0-20220622161953-175b2fd9d664/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.1.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.5.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.39.0 h1:CvCKL8MeisomCi6qNZ+wbb0DN9E5AATixKsvNtMoMFk=
-golang.org/x/sys v0.39.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
+golang.org/x/sys v0.41.0 h1:Ivj+2Cp/ylzLiEU89QhWblYnOE9zerudt9Ftecq2C6k=
+golang.org/x/sys v0.41.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
 golang.org/x/term v0.38.0 h1:PQ5pkm/rLO6HnxFR7N2lJHOZX6Kez5Y1gDSJla6jo7Q=
 golang.org/x/term v0.38.0/go.mod h1:bSEAKrOT1W+VSu9TSCMtoGEOUcKxOKgl3LE5QEF/xVg=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=

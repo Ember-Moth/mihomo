@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
 	N "github.com/metacubex/mihomo/common/net"
@@ -20,17 +21,25 @@ import (
 	"github.com/metacubex/mihomo/listener/jls"
 	"github.com/metacubex/mihomo/listener/restls"
 	"github.com/metacubex/mihomo/listener/shadowtls"
+	"github.com/metacubex/mihomo/listener/sing"
 	"github.com/metacubex/mihomo/transport/shadowsocks/shadowaead"
 	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
 	"github.com/metacubex/mihomo/transport/snell"
+
+	SS "github.com/Ember-Moth/sing-snell"
+	M "github.com/metacubex/sing/common/metadata"
 )
 
 const maxPacketLength = 0x3fff
 
 type Listener struct {
-	closed    bool
+	closed    atomic.Bool
 	config    LC.SnellServer
 	listeners []net.Listener
+	ctx       context.Context
+	cancel    context.CancelFunc
+	service   SS.Service
+	handler   *sing.ListenerHandler
 }
 
 func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (C.MultiAddrListener, error) {
@@ -38,20 +47,21 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 		config.Version = snell.Version4
 	}
 	switch config.Version {
-	case snell.Version1, snell.Version2, snell.Version3, snell.Version4, snell.Version5:
+	case snell.Version1, snell.Version2, snell.Version3, snell.Version4, snell.Version5, snell.Version6:
 	default:
 		return nil, fmt.Errorf("snell inbound version %d is not supported", config.Version)
 	}
 	if config.Psk == "" {
 		return nil, errors.New("snell inbound requires psk")
 	}
+	if config.Version6Mode != "" && config.Version != snell.Version6 {
+		return nil, errors.New("snell version6-mode requires version 6")
+	}
 	switch config.ObfsMode {
 	case "", "http", "tls":
 	default:
 		return nil, fmt.Errorf("snell inbound obfs mode error: %s", config.ObfsMode)
 	}
-
-	l := &Listener{config: config}
 
 	securityModes := make([]string, 0, 3)
 	if config.ShadowTLS.Enable {
@@ -87,6 +97,14 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 			return nil, err
 		}
 	}
+	l := &Listener{config: config}
+	l.ctx, l.cancel = context.WithCancel(context.Background())
+	if config.Version >= snell.Version4 {
+		if err := l.initSingSnell(tunnel); err != nil {
+			l.cancel()
+			return nil, err
+		}
+	}
 	for _, addr := range strings.Split(config.Listen, ",") {
 		addr = strings.TrimSpace(addr)
 		if addr == "" {
@@ -109,7 +127,7 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 			for {
 				conn, err := ln.Accept()
 				if err != nil {
-					if l.closed {
+					if l.closed.Load() {
 						return
 					}
 					continue
@@ -122,7 +140,8 @@ func New(config LC.SnellServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 }
 
 func (l *Listener) Close() error {
-	l.closed = true
+	l.closed.Store(true)
+	l.cancel()
 	var retErr error
 	for _, ln := range l.listeners {
 		if err := ln.Close(); err != nil {
@@ -145,6 +164,8 @@ func (l *Listener) AddrList() (addrList []net.Addr) {
 
 func (l *Listener) HandleConn(rawConn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) {
 	defer rawConn.Close()
+	stop := context.AfterFunc(l.ctx, func() { _ = rawConn.Close() })
+	defer stop()
 	user, loaded := shadowtls.UserFromConn(rawConn)
 	if jlsUser, jlsLoaded := jls.UserFromConn(rawConn); jlsLoaded {
 		user, loaded = jlsUser, true
@@ -153,6 +174,10 @@ func (l *Listener) HandleConn(rawConn net.Conn, tunnel C.Tunnel, additions ...in
 		additions = append(append([]inbound.Addition(nil), additions...), inbound.WithInUser(user))
 	}
 	conn := rawConn
+	if l.service != nil && l.config.Version < snell.Version6 {
+		l.handleSingSnell(conn, additions...)
+		return
+	}
 	switch l.config.ObfsMode {
 	case "http":
 		conn = obfs.NewHTTPObfsServer(conn)
@@ -162,12 +187,25 @@ func (l *Listener) HandleConn(rawConn net.Conn, tunnel C.Tunnel, additions ...in
 	default:
 		return
 	}
+	if l.service != nil {
+		l.handleSingSnell(conn, additions...)
+		return
+	}
 	stream := snell.ServerStreamConn(conn, []byte(l.config.Psk), l.config.Version)
 	for {
 		reuse, err := l.handleRequest(stream, tunnel, additions...)
 		if err != nil || !reuse {
 			return
 		}
+	}
+}
+
+func (l *Listener) handleSingSnell(conn net.Conn, additions ...inbound.Addition) {
+	ctx := sing.WithAdditions(l.ctx, additions...)
+	ctx = sing.WithInAddr(ctx, conn.LocalAddr())
+	err := l.service.NewConnection(ctx, conn, M.SocksaddrFromNet(conn.RemoteAddr()), nil)
+	if err != nil && !isClosedError(err) {
+		l.handler.NewError(ctx, err)
 	}
 }
 

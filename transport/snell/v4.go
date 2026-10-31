@@ -1,5 +1,8 @@
 package snell
 
+// The old v4 codec is retained as an interoperability reference. The inbound
+// and outbound adapters use sing-snell for v4 and later protocol versions.
+
 import (
 	"crypto/cipher"
 	cryptorand "crypto/rand"
