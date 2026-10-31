@@ -55,7 +55,7 @@ func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHello
 			return nil, err
 		}
 
-		if !realityConfig.SupportX25519MLKEM768 { // for X25519MLKEM768 does not work properly with the old reality server
+		if !realityConfig.SupportX25519MLKEM768 { // explicit compatibility mode for old REALITY servers
 			err = BuildRemovedX25519MLKEM768HandshakeState(uConn)
 			if err != nil {
 				return nil, err
@@ -68,12 +68,14 @@ func GetRealityConn(ctx context.Context, conn net.Conn, fingerprint UClientHello
 			rawSessionID[i] = 0
 		}
 
-		binary.BigEndian.PutUint64(hello.SessionId, uint64(ntp.Now().Unix()))
-
+		// Wire version matches Xray-core v26.10.29.
+		// Keep the reserved byte and timestamp layout aligned with its UClient.
+		hello.SessionId[0] = 26
+		hello.SessionId[1] = 10
+		hello.SessionId[2] = 29
+		hello.SessionId[3] = 0
+		binary.BigEndian.PutUint32(hello.SessionId[4:8], uint32(ntp.Now().Unix()))
 		copy(hello.SessionId[8:], realityConfig.ShortID[:])
-		hello.SessionId[0] = 1
-		hello.SessionId[1] = 8
-		hello.SessionId[2] = 2
 
 		//log.Debugln("REALITY hello.sessionId[:16]: %v", hello.SessionId[:16])
 
