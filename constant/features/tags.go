@@ -1,6 +1,9 @@
 package features
 
 func Tags() (tags []string) {
+	if WithNaive {
+		tags = append(tags, "with_naive")
+	}
 	if CMFA {
 		tags = append(tags, "cmfa")
 	}

@@ -55,6 +55,13 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewHttp(*httpOption)
+	case "naive":
+		naiveOption := &outbound.NaiveOption{BasicOption: basicOption}
+		err = decoder.Decode(mapping, naiveOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewNaive(*naiveOption)
 	case "vmess":
 		vmessOption := &outbound.VmessOption{BasicOption: basicOption}
 		err = decoder.Decode(mapping, vmessOption)
@@ -230,6 +237,13 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 	if err != nil {
 		return nil, err
 	}
+	// Some adapters (e.g. Naive) allocate native resources during construction.
+	// A subsequent mux configuration error must not leave that adapter running.
+	defer func(initial outbound.ProxyAdapter) {
+		if err != nil {
+			_ = initial.Close()
+		}
+	}(proxy)
 
 	if muxMapping, muxExist := mapping["smux"].(map[string]any); muxExist {
 		muxOption := &outbound.SingMuxOption{}

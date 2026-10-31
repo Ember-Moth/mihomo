@@ -55,6 +55,7 @@ const (
 	ZeroTier
 	EasyTier
 	GostRelay
+	Naive
 )
 
 const (
@@ -204,6 +205,8 @@ func (at AdapterType) String() string {
 		return "Socks5"
 	case Http:
 		return "Http"
+	case Naive:
+		return "Naive"
 	case Vmess:
 		return "Vmess"
 	case Vless:
