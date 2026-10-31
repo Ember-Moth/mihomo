@@ -193,7 +193,7 @@ func TestInboundAnyTLS_Reality(t *testing.T) {
 				RealityOpts: outbound.RealityOptions{
 					PublicKey:             realityPublickey,
 					ShortID:               realityShortid,
-					SupportX25519MLKEM768: testCase.hybrid,
+					SupportX25519MLKEM768: &testCase.hybrid,
 				},
 			}
 			testInboundAnyTLS(t, inboundOptions, outboundOptions)

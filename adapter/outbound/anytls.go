@@ -139,7 +139,7 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 	if err != nil {
 		return nil, err
 	}
-	if option.RealityOpts.PublicKey == "" && (option.RealityOpts.ShortID != "" || option.RealityOpts.SupportX25519MLKEM768) {
+	if option.RealityOpts.PublicKey == "" && (option.RealityOpts.ShortID != "" || (option.RealityOpts.SupportX25519MLKEM768 != nil && *option.RealityOpts.SupportX25519MLKEM768)) {
 		return nil, errors.New("AnyTLS REALITY requires a public-key")
 	}
 	realityConfig, err := option.RealityOpts.Parse()

@@ -985,7 +985,7 @@ proxies: # socks5
     reality-opts:
       public-key: xxx
       short-id: xxx # optional
-      support-x25519mlkem768: false # 如果服务端支持可手动设置为true
+      support-x25519mlkem768: true # 默认开启；仅兼容旧 REALITY 服务端时显式设为 false
     client-fingerprint: chrome # cannot be empty
 
   - name: "vless-reality-grpc"
@@ -1012,7 +1012,7 @@ proxies: # socks5
     reality-opts:
       public-key: CrrQSjAG_YkHLwvM2M-7XkKJilgL5upBKCp0od0tLhE
       short-id: 10f897e26c4b9478
-      support-x25519mlkem768: false # 如果服务端支持可手动设置为true
+      support-x25519mlkem768: true # 默认开启；仅兼容旧 REALITY 服务端时显式设为 false
 
   - name: "vless-ws"
     type: vless
@@ -1738,7 +1738,7 @@ proxies: # socks5
     # reality-opts: # AnyTLS + REALITY，须同时设置 client-fingerprint 和匹配服务端的 sni
     #   public-key: YOUR_REALITY_PUBLIC_KEY
     #   short-id: "0123456789abcdef"
-    #   # support-x25519mlkem768: false # 服务端支持时可开启
+    #   # support-x25519mlkem768: true # 默认开启；旧服务端可显式设为 false
     # REALITY 与 shadow-tls-opts、restls-opts、jls-opts、ECH 和 mTLS 互斥。
     # REALITY 使用自己的认证及指纹 ClientHello；普通 TLS 的证书校验/ALPN 选项不控制 REALITY。
 
