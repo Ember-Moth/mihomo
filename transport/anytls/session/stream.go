@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/transport/anytls/pipe"
@@ -22,7 +23,7 @@ type Stream struct {
 
 	dieOnce sync.Once
 	dieHook func()
-	dieErr  error
+	dieErr  atomic.Pointer[error]
 
 	reportOnce sync.Once
 }
@@ -40,8 +41,10 @@ func newStream(id uint32, sess *Session) *Stream {
 // Read implements net.Conn
 func (s *Stream) Read(b []byte) (n int, err error) {
 	n, err = s.pipeR.Read(b)
-	if n == 0 && s.dieErr != nil {
-		err = s.dieErr
+	if n == 0 {
+		if closeErr := s.closedError(); closeErr != nil {
+			err = closeErr
+		}
 	}
 	return
 }
@@ -53,8 +56,8 @@ func (s *Stream) Write(b []byte) (n int, err error) {
 		return 0, os.ErrDeadlineExceeded
 	default:
 	}
-	if s.dieErr != nil {
-		return 0, s.dieErr
+	if closeErr := s.closedError(); closeErr != nil {
+		return 0, closeErr
 	}
 	n, err = s.sess.writeDataFrame(s.id, b)
 	return
@@ -69,7 +72,8 @@ func (s *Stream) Close() error {
 func (s *Stream) closeLocally() {
 	var once bool
 	s.dieOnce.Do(func() {
-		s.dieErr = net.ErrClosed
+		err := net.ErrClosed
+		s.dieErr.Store(&err)
 		s.pipeR.Close()
 		once = true
 	})
@@ -84,7 +88,7 @@ func (s *Stream) closeLocally() {
 func (s *Stream) closeWithError(err error) error {
 	var once bool
 	s.dieOnce.Do(func() {
-		s.dieErr = err
+		s.dieErr.Store(&err)
 		s.pipeR.Close()
 		once = true
 	})
@@ -96,8 +100,15 @@ func (s *Stream) closeWithError(err error) error {
 		}
 		return err
 	} else {
-		return s.dieErr
+		return s.closedError()
 	}
+}
+
+func (s *Stream) closedError() error {
+	if err := s.dieErr.Load(); err != nil {
+		return *err
+	}
+	return nil
 }
 
 func (s *Stream) SetReadDeadline(t time.Time) error {

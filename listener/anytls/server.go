@@ -16,6 +16,7 @@ import (
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/jls"
+	"github.com/metacubex/mihomo/listener/reality"
 	"github.com/metacubex/mihomo/listener/restls"
 	"github.com/metacubex/mihomo/listener/shadowtls"
 	"github.com/metacubex/mihomo/listener/sing"
@@ -49,6 +50,13 @@ func New(config LC.AnyTLSServer, lc C.InboundListenConfig, tunnel C.Tunnel, addi
 	var shadowTLSBuilder *shadowtls.Builder
 	var restlsBuilder *restls.Builder
 	var jlsBuilder *jls.Builder
+	var realityBuilder *reality.Builder
+	if config.RealityConfig.PrivateKey == "" && (config.RealityConfig.Dest != "" || len(config.RealityConfig.ShortID) != 0 || len(config.RealityConfig.ServerNames) != 0) {
+		return nil, errors.New("AnyTLS REALITY requires a private-key")
+	}
+	if config.RealityConfig.PrivateKey != "" && (config.Certificate != "" || config.PrivateKey != "" || config.EchKey != "" || config.ClientAuthType != "" || config.ClientAuthCert != "") {
+		return nil, errors.New("AnyTLS REALITY cannot be combined with certificates, client-auth or ECH")
+	}
 	tlsConfig := &tls.Config{Time: ntp.Now}
 	if config.Certificate != "" && config.PrivateKey != "" {
 		certLoader, err := ca.NewTLSKeyPairLoader(config.Certificate, config.PrivateKey)
@@ -82,7 +90,7 @@ func New(config LC.AnyTLSServer, lc C.InboundListenConfig, tunnel C.Tunnel, addi
 	if tlsConfig.ClientAuth != tls.NoClientCert && tlsConfig.GetCertificate == nil {
 		return nil, errors.New("client-auth requires certificate")
 	}
-	securityModes := make([]string, 0, 4)
+	securityModes := make([]string, 0, 5)
 	if tlsConfig.GetCertificate != nil {
 		securityModes = append(securityModes, "certificate")
 	}
@@ -95,8 +103,17 @@ func New(config LC.AnyTLSServer, lc C.InboundListenConfig, tunnel C.Tunnel, addi
 	if config.JLSConfig.Enable {
 		securityModes = append(securityModes, "jls")
 	}
+	if config.RealityConfig.PrivateKey != "" {
+		securityModes = append(securityModes, "reality")
+	}
 	if len(securityModes) > 1 {
 		return nil, errors.New("security modes are mutually exclusive: " + strings.Join(securityModes, ", "))
+	}
+	if config.RealityConfig.PrivateKey != "" {
+		realityBuilder, err = config.RealityConfig.Build(tunnel)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if config.ShadowTLS.Enable {
 		shadowTLSBuilder, err = shadowtls.New(config.ShadowTLS, tunnel)
@@ -156,10 +173,13 @@ func New(config LC.AnyTLSServer, lc C.InboundListenConfig, tunnel C.Tunnel, addi
 			l = restlsBuilder.NewListener(l)
 		} else if jlsBuilder != nil {
 			l = jlsBuilder.NewListener(l)
+		} else if realityBuilder != nil {
+			l = realityBuilder.NewListener(l)
 		} else if tlsConfig.GetCertificate != nil {
 			l = tls.NewListener(l, tlsConfig)
 		} else if !config.AllowInsecure {
-			return nil, errors.New("disallow using AnyTLS without certificates/shadow-tls/res-tls/jls/allow-insecure config")
+			_ = l.Close()
+			return nil, errors.New("disallow using AnyTLS without certificates/shadow-tls/res-tls/jls/reality/allow-insecure config")
 		}
 		sl.listeners = append(sl.listeners, l)
 
