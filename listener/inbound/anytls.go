@@ -20,6 +20,7 @@ type AnyTLSOption struct {
 	ShadowTLS      ShadowTLS         `inbound:"shadow-tls,omitempty"`
 	ResTLS         ResTLS            `inbound:"res-tls,omitempty"`
 	JLSConfig      JLSConfig         `inbound:"jls-config,omitempty"`
+	RealityConfig  RealityConfig     `inbound:"reality-config,omitempty"`
 	AllowInsecure  bool              `inbound:"allow-insecure,omitempty"`
 	PaddingScheme  string            `inbound:"padding-scheme,omitempty"`
 }
@@ -55,6 +56,7 @@ func NewAnyTLS(options *AnyTLSOption) (*AnyTLS, error) {
 			ShadowTLS:      options.ShadowTLS.Build(),
 			ResTLS:         options.ResTLS.Build(),
 			JLSConfig:      options.JLSConfig.Build(),
+			RealityConfig:  options.RealityConfig.Build(),
 			AllowInsecure:  options.AllowInsecure,
 			PaddingScheme:  options.PaddingScheme,
 		},

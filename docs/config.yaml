@@ -1734,6 +1734,12 @@ proxies: # socks5
     # jls-opts: # 使用 sni 作为 JLS SNI
     #   username: jls-user
     #   password: jls-password
+    # reality-opts: # AnyTLS + REALITY，须同时设置 client-fingerprint 和匹配服务端的 sni
+    #   public-key: YOUR_REALITY_PUBLIC_KEY
+    #   short-id: "0123456789abcdef"
+    #   # support-x25519mlkem768: false # 服务端支持时可开启
+    # REALITY 与 shadow-tls-opts、restls-opts、jls-opts、ECH 和 mTLS 互斥。
+    # REALITY 使用自己的认证及指纹 ClientHello；普通 TLS 的证书校验/ALPN 选项不控制 REALITY。
 
   # trusttunnel
   - name: trusttunnel
@@ -2543,7 +2549,7 @@ listeners:
     users:
       username1: password1
       username2: password2
-    # "shadow-tls"、"res-tls" 和 "jls-config" 均未启用且 "allow-insecure" 不为 true 时，必须填写 "certificate" 和 "private-key"；启用 ShadowTLS、ResTLS 或 JLS 时不要填写
+    # "reality-config"、"shadow-tls"、"res-tls" 和 "jls-config" 均未启用且 "allow-insecure" 不为 true 时，必须填写 "certificate" 和 "private-key"；启用这些传输时不要填写普通 TLS 证书
     certificate: ./server.crt # 证书 PEM 格式，或者 证书的路径
     private-key: ./server.key
     # 下面两项为mTLS配置项，如果client-auth-type设置为 "verify-if-given" 或 "require-and-verify" 则client-auth-cert必须不为空
@@ -2584,7 +2590,15 @@ listeners:
     #   # alpn: [h2, http/1.1]
     #   # proxy: ""
     #   # rate-limit: 0 # fallback 转发限速，单位 bit/s；0 表示不限速
-    ### 注意，anytls listener, 如果 "allow-insecure" 不为 true, 至少需要填写 “certificate和private-key” 或 “shadow-tls” 或 “res-tls” 或 “jls-config” 的其中一项 ###
+    # reality-config: # 密钥可由 mihomo generate reality-keypair 生成
+    #   dest: www.example.com:443
+    #   private-key: YOUR_REALITY_PRIVATE_KEY
+    #   server-names: [www.example.com]
+    #   short-id: ["0123456789abcdef"]
+    #   # max-time-difference: 0
+    #   # proxy: ""
+    # REALITY 与普通 TLS 证书、client-auth、ech-key、shadow-tls、res-tls 和 jls-config 互斥。
+    ### 注意，anytls listener, 如果 "allow-insecure" 不为 true, 至少需要填写 “certificate和private-key” 或 “shadow-tls” 或 “res-tls” 或 “jls-config” 或 “reality-config” 的其中一项 ###
     # allow-insecure: false # 是否允许不开启tls加密（注意：仅用于有 nginx, caddy 前置的情况）
     # padding-scheme: "" # https://github.com/anytls/anytls-go/blob/main/docs/protocol.md#cmdupdatepaddingscheme
 
