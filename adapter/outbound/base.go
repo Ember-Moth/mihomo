@@ -376,6 +376,12 @@ type autoCloseProxyAdapter struct {
 	closeErr  error
 }
 
+// UnwrapProxyAdapter exposes optional transport capabilities without changing
+// the common ProxyAdapter interface or bypassing this wrapper's ownership.
+func (p *autoCloseProxyAdapter) UnwrapProxyAdapter() C.ProxyAdapter {
+	return p.ProxyAdapter
+}
+
 func (p *autoCloseProxyAdapter) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
 	c, err := p.ProxyAdapter.DialContext(ctx, metadata)
 	if err != nil {

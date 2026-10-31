@@ -76,6 +76,13 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewVless(*vlessOption)
+	case "vless-reverse":
+		reverseOption := &outbound.VlessReverseOption{BasicOption: basicOption}
+		err = decoder.Decode(mapping, reverseOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewVlessReverse(*reverseOption)
 	case "snell":
 		snellOption := &outbound.SnellOption{BasicOption: basicOption}
 		err = decoder.Decode(mapping, snellOption)

@@ -5,11 +5,14 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/inbound"
+	"github.com/metacubex/mihomo/common/utils"
 	"github.com/metacubex/mihomo/component/ca"
 	"github.com/metacubex/mihomo/component/ech"
+	"github.com/metacubex/mihomo/component/proxydialer"
 	C "github.com/metacubex/mihomo/constant"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/jls"
@@ -20,6 +23,7 @@ import (
 	"github.com/metacubex/mihomo/ntp"
 	"github.com/metacubex/mihomo/transport/gun"
 	"github.com/metacubex/mihomo/transport/vless/encryption"
+	"github.com/metacubex/mihomo/transport/vless/reverse"
 	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
 	"github.com/metacubex/mihomo/transport/xhttp"
 
@@ -31,14 +35,18 @@ import (
 )
 
 type Listener struct {
-	closed     bool
-	config     LC.VlessServer
-	listeners  []net.Listener
-	service    *Service[string]
-	decryption *encryption.ServerInstance
+	closed        atomic.Bool
+	config        LC.VlessServer
+	listeners     []net.Listener
+	service       *Service[string]
+	decryption    *encryption.ServerInstance
+	cancelReverse context.CancelFunc
 }
 
 func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (sl *Listener, err error) {
+	if err = LC.ValidateVlessReverseUsers(config.Users); err != nil {
+		return nil, err
+	}
 	if len(additions) == 0 {
 		additions = []inbound.Addition{
 			inbound.WithInName("DEFAULT-VLESS"),
@@ -67,7 +75,47 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 			return it.Flow
 		}))
 
-	sl = &Listener{config: config, service: service}
+	reverseCtx, cancelReverse := context.WithCancel(context.Background())
+	defer func() {
+		if err != nil {
+			cancelReverse()
+		}
+	}()
+	sl = &Listener{config: config, service: service, cancelReverse: cancelReverse}
+	reverseUsers := make(map[[16]byte]string)
+	for _, user := range config.Users {
+		if user.Reverse == nil {
+			continue
+		}
+		id := utils.UUIDMap(user.UUID)
+		reverseUsers[id] = user.Reverse.Tag
+	}
+	if len(reverseUsers) > 0 {
+		provider, ok := tunnel.(reverse.RegistryProvider)
+		if !ok || provider.VLESSReverseRegistry() == nil {
+			return nil, errors.New("vless reverse requires a tunnel with a reverse registry")
+		}
+		registry := provider.VLESSReverseRegistry()
+		for _, tag := range reverseUsers {
+			if err = checkReverseOutbound(tunnel, tag); err != nil {
+				return nil, err
+			}
+		}
+		service.SetReverseUsers(reverseUsers, func(ctx context.Context, conn net.Conn, tag string) error {
+			if err := checkReverseOutbound(tunnel, tag); err != nil {
+				return err
+			}
+			pool := registry.Get(tag)
+			if pool == nil {
+				return errors.New("vless reverse outbound not found: " + tag)
+			}
+			ctx, cancel := context.WithCancel(ctx)
+			stop := context.AfterFunc(reverseCtx, cancel)
+			defer stop()
+			defer cancel()
+			return pool.Accept(ctx, conn)
+		})
+	}
 
 	sl.decryption, err = encryption.NewServer(config.Decryption)
 	if err != nil {
@@ -285,7 +333,7 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 			for {
 				c, err := l.Accept()
 				if err != nil {
-					if sl.closed {
+					if sl.closed.Load() {
 						break
 					}
 					continue
@@ -299,8 +347,20 @@ func New(config LC.VlessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 	return sl, nil
 }
 
+func checkReverseOutbound(tunnel C.Tunnel, tag string) error {
+	proxy, err := proxydialer.LookupProxy(tunnel, tag)
+	if err != nil {
+		return err
+	}
+	if proxy.Type() != C.VlessReverse {
+		return errors.New("vless reverse tag must name a vless-reverse outbound: " + tag)
+	}
+	return nil
+}
+
 func (l *Listener) Close() error {
-	l.closed = true
+	l.closed.Store(true)
+	l.cancelReverse()
 	var retErr error
 	for _, lis := range l.listeners {
 		err := lis.Close()

@@ -19,9 +19,10 @@ const (
 
 // Command types
 const (
-	CommandTCP byte = 1
-	CommandUDP byte = 2
-	CommandMux byte = 3
+	CommandTCP     byte = 1
+	CommandUDP     byte = 2
+	CommandMux     byte = 3
+	CommandReverse byte = 4
 )
 
 // Addr types
@@ -38,6 +39,7 @@ type DstAddr struct {
 	Addr     []byte
 	Port     uint16
 	Mux      bool // currently used for XUDP only
+	Reverse  bool
 }
 
 // Client is vless connection generator

@@ -24,9 +24,11 @@ import (
 )
 
 type Service[T comparable] struct {
-	userMap  map[[16]byte]T
-	userFlow map[T]string
-	handler  Handler
+	userMap       map[[16]byte]T
+	userFlow      map[[16]byte]string
+	reverseUsers  map[[16]byte]string
+	acceptReverse func(context.Context, net.Conn, string) error
+	handler       Handler
 }
 
 type Handler interface {
@@ -43,14 +45,19 @@ func NewService[T comparable](handler Handler) *Service[T] {
 
 func (s *Service[T]) UpdateUsers(userList []T, userUUIDList []string, userFlowList []string) {
 	userMap := make(map[[16]byte]T)
-	userFlowMap := make(map[T]string)
+	userFlowMap := make(map[[16]byte]string)
 	for i, userName := range userList {
 		userID := utils.UUIDMap(userUUIDList[i])
 		userMap[userID] = userName
-		userFlowMap[userName] = userFlowList[i]
+		userFlowMap[userID] = userFlowList[i]
 	}
 	s.userMap = userMap
 	s.userFlow = userFlowMap
+}
+
+func (s *Service[T]) SetReverseUsers(users map[[16]byte]string, accept func(context.Context, net.Conn, string) error) {
+	s.reverseUsers = users
+	s.acceptReverse = accept
 }
 
 var _ N.TCPConnectionHandler = (*Service[int])(nil)
@@ -98,7 +105,12 @@ func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, metadata 
 	}
 
 	var destination M.Socksaddr
-	if command != vless.CommandMux {
+	switch command {
+	case vless.CommandTCP, vless.CommandUDP, vless.CommandMux, vless.CommandReverse:
+	default:
+		return E.New("unknown command: ", command)
+	}
+	if command != vless.CommandMux && command != vless.CommandReverse {
 		destination, err = vmess.AddressSerializer.ReadAddrPort(conn)
 		if err != nil {
 			return err
@@ -111,8 +123,15 @@ func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, metadata 
 	}
 	ctx = auth.ContextWithUser(ctx, user)
 	metadata.Destination = destination
+	reverseTag := s.reverseUsers[requestUUID]
+	if reverseTag != "" && command != vless.CommandReverse {
+		return E.New("reverse-only user cannot use forward proxy")
+	}
+	if command == vless.CommandReverse && (reverseTag == "" || s.acceptReverse == nil) {
+		return E.New("user is not allowed to create a reverse tunnel")
+	}
 
-	userFlow := s.userFlow[user]
+	userFlow := s.userFlow[requestUUID]
 	requestFlow := addons.Flow
 	if requestFlow != userFlow && requestFlow != "" {
 		return E.New("flow mismatch: expected ", flowName(userFlow), ", but got ", flowName(requestFlow))
@@ -131,6 +150,8 @@ func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, metadata 
 		return E.New("unknown flow: ", requestFlow)
 	}
 	switch command {
+	case vless.CommandReverse:
+		return s.acceptReverse(ctx, conn, reverseTag)
 	case vless.CommandTCP:
 		return s.handler.NewConnection(ctx, conn, metadata)
 	case vless.CommandUDP:
@@ -185,9 +206,8 @@ func (c *serverConn) WriteBuffer(buffer *buf.Buffer) error {
 }
 
 func (c *serverConn) FrontHeadroom() int {
-	if c.responseWritten {
-		return 0
-	}
+	// Buffer allocators may query headroom concurrently with the first write.
+	// Reserving the two-byte response header unconditionally is safe in both states.
 	return 2
 }
 

@@ -57,8 +57,10 @@ type Conn struct {
 	closed     bool
 	onClose    func()
 
-	// deadlines
-	deadline *time.Timer
+	// deadlines, protected by closeMutex
+	deadline      *time.Timer
+	readDeadline  time.Time
+	writeDeadline time.Time
 }
 
 type Config struct {
@@ -189,10 +191,18 @@ func (g *Conn) FrontHeadroom() int {
 func (g *Conn) Close() error {
 	g.closeMutex.Lock()
 	defer g.closeMutex.Unlock()
+	return g.closeLocked()
+}
+
+func (g *Conn) closeLocked() error {
 	if g.closed {
 		return nil
 	}
 	g.closed = true
+	if g.deadline != nil {
+		g.deadline.Stop()
+		g.deadline = nil
+	}
 
 	var errorArr []error
 
@@ -221,26 +231,72 @@ func (g *Conn) Close() error {
 	return errors.Join(errorArr...)
 }
 
-func (g *Conn) SetReadDeadline(t time.Time) error  { return g.SetDeadline(t) }
-func (g *Conn) SetWriteDeadline(t time.Time) error { return g.SetDeadline(t) }
+func (g *Conn) SetReadDeadline(t time.Time) error {
+	g.closeMutex.Lock()
+	defer g.closeMutex.Unlock()
+	g.readDeadline = t
+	return g.updateDeadlineLocked()
+}
+
+func (g *Conn) SetWriteDeadline(t time.Time) error {
+	g.closeMutex.Lock()
+	defer g.closeMutex.Unlock()
+	g.writeDeadline = t
+	return g.updateDeadlineLocked()
+}
 
 func (g *Conn) SetDeadline(t time.Time) error {
-	if t.IsZero() {
+	g.closeMutex.Lock()
+	defer g.closeMutex.Unlock()
+	g.readDeadline = t
+	g.writeDeadline = t
+	return g.updateDeadlineLocked()
+}
+
+func (g *Conn) updateDeadlineLocked() error {
+	if g.closed {
+		return net.ErrClosed
+	}
+	deadline := g.firstDeadlineLocked()
+	if deadline.IsZero() {
 		if g.deadline != nil {
 			g.deadline.Stop()
-			g.deadline = nil
 		}
 		return nil
 	}
-	d := time.Until(t)
-	if g.deadline != nil {
-		g.deadline.Reset(d)
-		return nil
+	if g.deadline == nil {
+		g.deadline = time.AfterFunc(time.Until(deadline), g.expireDeadline)
+	} else {
+		g.deadline.Reset(time.Until(deadline))
 	}
-	g.deadline = time.AfterFunc(d, func() {
-		g.Close()
-	})
 	return nil
+}
+
+func (g *Conn) firstDeadlineLocked() time.Time {
+	deadline := g.readDeadline
+	if deadline.IsZero() || (!g.writeDeadline.IsZero() && g.writeDeadline.Before(deadline)) {
+		deadline = g.writeDeadline
+	}
+	return deadline
+}
+
+func (g *Conn) expireDeadline() {
+	g.closeMutex.Lock()
+	defer g.closeMutex.Unlock()
+	if g.closed {
+		return
+	}
+	deadline := g.firstDeadlineLocked()
+	if deadline.IsZero() {
+		return
+	}
+	if remaining := time.Until(deadline); remaining > 0 {
+		// A callback may already have started when another goroutine refreshes
+		// the deadline. Recheck the current value before closing the transport.
+		g.deadline.Reset(remaining)
+		return
+	}
+	_ = g.closeLocked()
 }
 
 type Transport struct {
