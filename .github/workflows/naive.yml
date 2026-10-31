@@ -1,0 +1,86 @@
+name: Naive
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [Meta]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            cgo: '0'
+            tags: with_naive,with_purego
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+            cgo: '0'
+            tags: with_naive,with_purego
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            cgo: '1'
+            tags: with_naive
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      CGO_ENABLED: ${{ matrix.cgo }}
+      GOTOOLCHAIN: local
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version: '1.26'
+      - name: Build complete Naive bundle
+        run: bash scripts/build-naive.sh
+      - name: Check sing dependency ownership
+        run: bash scripts/check-sing-dependency.sh '${{ matrix.tags }}'
+      - name: Download pinned sing-box test server
+        env:
+          SING_BOX_VERSION: '1.13.15'
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, tarfile, urllib.request, zipfile
+          version = os.environ['SING_BOX_VERSION']
+          target = f"{os.environ['GOOS']}-{os.environ['GOARCH']}"
+          extension = 'zip' if os.environ['GOOS'] == 'windows' else 'tar.gz'
+          name = f'sing-box-{version}-{target}'
+          destination = pathlib.Path('bin/naive-test-server')
+          destination.mkdir(parents=True, exist_ok=True)
+          archive = destination / f'server.{extension}'
+          urllib.request.urlretrieve(f'https://github.com/SagerNet/sing-box/releases/download/v{version}/{name}.{extension}', archive)
+          binary = 'sing-box.exe' if os.environ['GOOS'] == 'windows' else 'sing-box'
+          output = destination / binary
+          if extension == 'zip':
+              with zipfile.ZipFile(archive) as source:
+                  output.write_bytes(source.read(f'{name}/{binary}'))
+          else:
+              with tarfile.open(archive) as source:
+                  output.write_bytes(source.extractfile(f'{name}/{binary}').read())
+          output.chmod(0o755)
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'NAIVE_TEST_SERVER={output.resolve()}\n')
+          PY
+      - name: Test configuration, DNS, and interoperability
+        run: |
+          export LD_LIBRARY_PATH="$PWD/bin/naive/$GOOS-$GOARCH${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          export PATH="$PWD/bin/naive/$GOOS-$GOARCH:$PATH"
+          go test -tags '${{ matrix.tags }}' ./adapter ./adapter/outbound -run Naive -count=1 -timeout=5m
+      - name: Upload executable and native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: mihomo-naive-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/naive/${{ matrix.goos }}-${{ matrix.goarch }}/

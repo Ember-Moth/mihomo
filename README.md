@@ -30,6 +30,8 @@
 - Netfilter TCP redirecting. Deploy Mihomo on your Internet gateway with `iptables`.
 - Comprehensive HTTP RESTful API controller
 
+NaiveProxy outbound is available in this fork with the `with_naive` build tag. See [Naive configuration and builds](docs/naive.md).
+
 ## Dashboard
 
 A web dashboard with first-class support for this project has been created; it can be checked out at [metacubexd](https://github.com/MetaCubeX/metacubexd).
@@ -45,7 +47,7 @@ Documentation can be found in [mihomo Docs](https://wiki.metacubex.one/).
 ## For development
 
 Requirements:
-[Go 1.20 or newer](https://go.dev/dl/)
+[Go 1.24 or newer](https://go.dev/dl/)
 
 Build mihomo:
 

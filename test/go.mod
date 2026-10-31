@@ -1,6 +1,6 @@
 module mihomo-test
 
-go 1.20
+go 1.24.0
 
 require (
 	github.com/docker/docker v20.10.21+incompatible

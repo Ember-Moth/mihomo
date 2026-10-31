@@ -375,6 +375,16 @@ dns:
     # "rule-set:global,dns": 8.8.8.8
 
 proxies: # socks5
+
+  # NaiveProxy requires a build with the with_naive tag (see docs/naive.md).
+  # - name: naive
+  #   type: naive
+  #   server: proxy.example.com
+  #   port: 443
+  #   username: user
+  #   password: password
+  #   quic: false
+  #   udp-over-tcp: false # only enable with a compatible UoT server
   - name: "socks"
     type: socks5
     server: server
