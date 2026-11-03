@@ -27,17 +27,20 @@ func (r naiveTestResolver) ExchangeContext(ctx context.Context, query *dns.Msg) 
 }
 
 func TestNaiveDNS(t *testing.T) {
-	oldProxy, oldSystem, oldDefault := resolver.ProxyServerHostResolver, resolver.SystemResolver, resolver.DefaultResolver
-	oldHosts, oldIPv6 := resolver.DefaultHosts, resolver.DisableIPv6
+	oldProxy, oldSystem, oldDefault := resolver.ProxyServerHostResolver.Load(), resolver.SystemResolver.Load(), resolver.DefaultResolver.Load()
+	oldHosts, oldIPv6 := resolver.DefaultHosts.Load(), resolver.DisableIPv6.Load()
 	t.Cleanup(func() {
-		resolver.ProxyServerHostResolver, resolver.SystemResolver, resolver.DefaultResolver = oldProxy, oldSystem, oldDefault
-		resolver.DefaultHosts, resolver.DisableIPv6 = oldHosts, oldIPv6
+		resolver.ProxyServerHostResolver.Store(oldProxy)
+		resolver.SystemResolver.Store(oldSystem)
+		resolver.DefaultResolver.Store(oldDefault)
+		resolver.DefaultHosts.Store(oldHosts)
+		resolver.DisableIPv6.Store(oldIPv6)
 	})
-	resolver.DefaultHosts = resolver.NewHosts(trie.New[resolver.HostValue]())
-	resolver.DisableIPv6 = false
+	resolver.DefaultHosts.Store(resolver.NewHosts(trie.New[resolver.HostValue]()))
+	resolver.DisableIPv6.Store(false)
 	var queries []string
 	var cached *dns.Msg
-	resolver.ProxyServerHostResolver = naiveTestResolver{exchange: func(ctx context.Context, query *dns.Msg) (*dns.Msg, error) {
+	resolver.ProxyServerHostResolver.Store(naiveTestResolver{exchange: func(ctx context.Context, query *dns.Msg) (*dns.Msg, error) {
 		queries = append(queries, query.Question[0].Name)
 		if _, ok := ctx.Deadline(); !ok {
 			t.Error("DNS query has no deadline")
@@ -45,11 +48,11 @@ func TestNaiveDNS(t *testing.T) {
 		cached = new(dns.Msg).SetReply(query)
 		cached.Answer = []dns.RR{&dns.A{Hdr: dns.RR_Header{Name: query.Question[0].Name, Rrtype: dns.TypeA, Class: dns.ClassINET}, A: net.IPv4(127, 0, 0, 1)}}
 		return cached, nil
-	}}
-	resolver.DefaultResolver = naiveTestResolver{exchange: func(context.Context, *dns.Msg) (*dns.Msg, error) {
+	}})
+	resolver.DefaultResolver.Store(naiveTestResolver{exchange: func(context.Context, *dns.Msg) (*dns.Msg, error) {
 		t.Error("used application DNS instead of proxy DNS")
 		return nil, errors.New("wrong resolver")
-	}}
+	}})
 	lookup := naiveDNSResolver(C.DualStack)
 	query := new(dns.Msg).SetQuestion("proxy.example.org.", dns.TypeA)
 	answer := lookup(context.Background(), query)
@@ -61,13 +64,13 @@ func TestNaiveDNS(t *testing.T) {
 		t.Fatal("mutated shared DNS cache response")
 	}
 	host, _ := resolver.NewHostValueByIPs([]netip.Addr{netip.MustParseAddr("127.0.0.2")})
-	_ = resolver.DefaultHosts.Insert("override.example.org", host)
+	_ = resolver.DefaultHosts.Load().Insert("override.example.org", host)
 	answer = lookup(context.Background(), new(dns.Msg).SetQuestion("override.example.org.", dns.TypeA))
 	if len(queries) != 1 || answer.Answer[0].(*dns.A).A.String() != "127.0.0.2" {
 		t.Fatal("did not apply hosts override")
 	}
 	alias, _ := resolver.NewHostValueByDomain("proxy.example.org")
-	_ = resolver.DefaultHosts.Insert("alias.example.org", alias)
+	_ = resolver.DefaultHosts.Load().Insert("alias.example.org", alias)
 	answer = lookup(context.Background(), new(dns.Msg).SetQuestion("alias.example.org.", dns.TypeA))
 	if queries[len(queries)-1] != "proxy.example.org." || answer.Question[0].Name != "alias.example.org." || answer.Answer[0].(*dns.CNAME).Target != "proxy.example.org." {
 		t.Fatalf("invalid alias response: %v", answer)
@@ -81,14 +84,14 @@ func TestNaiveDNS(t *testing.T) {
 			t.Fatal("address family policy was not applied")
 		}
 	}
-	resolver.ProxyServerHostResolver = nil
-	resolver.SystemResolver = naiveTestResolver{exchange: func(context.Context, *dns.Msg) (*dns.Msg, error) {
+	resolver.ProxyServerHostResolver.Store(nil)
+	resolver.SystemResolver.Store(naiveTestResolver{exchange: func(context.Context, *dns.Msg) (*dns.Msg, error) {
 		return nil, errors.New("offline")
-	}}
+	}})
 	if answer = lookup(context.Background(), query); answer.Rcode != dns.RcodeServerFailure {
 		t.Fatal("DNS errors must produce SERVFAIL")
 	}
-	resolver.SystemResolver = nil
+	resolver.SystemResolver.Store(nil)
 	if answer = lookup(context.Background(), query); answer.Rcode != dns.RcodeServerFailure {
 		t.Fatal("missing resolver must produce SERVFAIL")
 	}

@@ -133,18 +133,18 @@ func (DNSResolver) LookupIP(ctx context.Context, query platform.DNSQuery) ([]net
 	}
 	switch query.IPVersion {
 	case 4:
-		return resolver.LookupIPv4WithResolver(ctx, query.Host, resolver.ProxyServerHostResolver)
+		return resolver.LookupIPv4WithResolver(ctx, query.Host, resolver.ProxyServerHostResolver.Load())
 	case 6:
-		return resolver.LookupIPv6WithResolver(ctx, query.Host, resolver.ProxyServerHostResolver)
+		return resolver.LookupIPv6WithResolver(ctx, query.Host, resolver.ProxyServerHostResolver.Load())
 	default:
-		return resolver.LookupIPWithResolver(ctx, query.Host, resolver.ProxyServerHostResolver)
+		return resolver.LookupIPWithResolver(ctx, query.Host, resolver.ProxyServerHostResolver.Load())
 	}
 }
 
 func exchangeDNS(ctx context.Context, host string, qtype uint16) (*D.Msg, error) {
-	r := resolver.ProxyServerHostResolver
+	r := resolver.ProxyServerHostResolver.Load()
 	if r == nil || !r.Invalid() {
-		r = resolver.SystemResolver
+		r = resolver.SystemResolver.Load()
 	}
 	if r == nil {
 		return nil, fmt.Errorf("easytier: DNS resolver is unavailable")

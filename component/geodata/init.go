@@ -69,6 +69,9 @@ func SetASNUrl(url string) {
 }
 
 func downloadToPath(url string, path string) (err error) {
+	if externalDownloads.Load() {
+		return externalDownloadError(path)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*90)
 	defer cancel()
 	resp, err := mihomoHttp.HttpRequest(ctx, url, http.MethodGet, nil, nil)
@@ -88,6 +91,7 @@ func downloadToPath(url string, path string) (err error) {
 }
 
 func InitGeoSite() error {
+	siteUses.Add(1)
 	geoSiteEnable.Store(true)
 	initGeoSiteMutex.Lock()
 	defer initGeoSiteMutex.Unlock()
@@ -102,6 +106,9 @@ func InitGeoSite() error {
 	if !initGeoSite {
 		if err := Verify(C.GeositeName); err != nil {
 			log.Warnln("GeoSite.dat invalid, remove and download: %s", err)
+			if externalDownloads.Load() {
+				return externalDownloadError("local data")
+			}
 			if err := os.Remove(C.Path.GeoSite()); err != nil {
 				return fmt.Errorf("can't remove invalid GeoSite.dat: %s", err.Error())
 			}
@@ -115,6 +122,7 @@ func InitGeoSite() error {
 }
 
 func InitGeoIP() error {
+	ipUses.Add(1)
 	geoIpEnable.Store(true)
 	initGeoIPMutex.Lock()
 	defer initGeoIPMutex.Unlock()
@@ -131,6 +139,9 @@ func InitGeoIP() error {
 		if initGeoIP != 1 {
 			if err := Verify(C.GeoipName); err != nil {
 				log.Warnln("GeoIP.dat invalid, remove and download: %s", err)
+				if externalDownloads.Load() {
+					return externalDownloadError("local data")
+				}
 				if err := os.Remove(C.Path.GeoIP()); err != nil {
 					return fmt.Errorf("can't remove invalid GeoIP.dat: %s", err.Error())
 				}
@@ -153,6 +164,9 @@ func InitGeoIP() error {
 	if initGeoIP != 2 {
 		if !mmdb.Verify(C.Path.MMDB()) {
 			log.Warnln("MMDB invalid, remove and download")
+			if externalDownloads.Load() {
+				return externalDownloadError("local data")
+			}
 			if err := os.Remove(C.Path.MMDB()); err != nil {
 				return fmt.Errorf("can't remove invalid MMDB: %s", err.Error())
 			}
@@ -166,6 +180,7 @@ func InitGeoIP() error {
 }
 
 func InitASN() error {
+	asnUses.Add(1)
 	asnEnable.Store(true)
 	initASNMutex.Lock()
 	defer initASNMutex.Unlock()
@@ -180,6 +195,9 @@ func InitASN() error {
 	if !initASN {
 		if !mmdb.Verify(C.Path.ASN()) {
 			log.Warnln("ASN invalid, remove and download")
+			if externalDownloads.Load() {
+				return externalDownloadError("local data")
+			}
 			if err := os.Remove(C.Path.ASN()); err != nil {
 				return fmt.Errorf("can't remove invalid ASN: %s", err.Error())
 			}
