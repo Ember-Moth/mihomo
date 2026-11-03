@@ -26,7 +26,7 @@ func (d *Direct) DialContext(ctx context.Context, metadata *C.Metadata) (C.Conn,
 		return nil, err
 	}
 	opts := d.DialOptions()
-	opts = append(opts, dialer.WithResolver(resolver.DirectHostResolver))
+	opts = append(opts, dialer.WithResolver(resolver.DirectHostResolver.Load()))
 	c, err := dialer.DialContext(ctx, "tcp", metadata.RemoteAddress(), opts...)
 	if err != nil {
 		return nil, err
@@ -50,8 +50,9 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 }
 
 func (d *Direct) ResolveUDP(ctx context.Context, metadata *C.Metadata) error {
-	if (!metadata.Resolved() || resolver.DirectHostResolver != resolver.DefaultResolver) && metadata.Host != "" {
-		ip, err := resolveIPWithResolver(ctx, metadata.Host, d.prefer, resolver.DirectHostResolver)
+	current := resolver.DirectHostResolver.Load()
+	if (!metadata.Resolved() || current != resolver.DefaultResolver.Load()) && metadata.Host != "" {
+		ip, err := resolveIPWithResolver(ctx, metadata.Host, d.prefer, current)
 		if err != nil {
 			return fmt.Errorf("can't resolve ip: %w", err)
 		}

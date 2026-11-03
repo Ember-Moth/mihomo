@@ -67,12 +67,7 @@ func UpdateMMDB() (err error) {
 	}
 	_ = instance.Close()
 
-	defer mmdb.ReloadIP()
-	mmdb.IPInstance().Reader.Close() //  mmdb is loaded with mmap, so it needs to be closed before overwriting the file
-	if err = vehicle.Write(data); err != nil {
-		return fmt.Errorf("can't save MMDB database file: %w", err)
-	}
-	return nil
+	return mmdb.InstallIP(data, func() error { return vehicle.Write(data) })
 }
 
 func UpdateASN() (err error) {
@@ -98,12 +93,7 @@ func UpdateASN() (err error) {
 	}
 	_ = instance.Close()
 
-	defer mmdb.ReloadASN()
-	mmdb.ASNInstance().Reader.Close() //  mmdb is loaded with mmap, so it needs to be closed before overwriting the file
-	if err = vehicle.Write(data); err != nil {
-		return fmt.Errorf("can't save ASN database file: %w", err)
-	}
-	return nil
+	return mmdb.InstallASN(data, func() error { return vehicle.Write(data) })
 }
 
 func UpdateGeoIp() (err error) {
@@ -195,11 +185,10 @@ var ErrGetDatabaseUpdateSkip = errors.New("GEO database is updating, skip")
 func UpdateGeoDatabases() error {
 	log.Infoln("[GEO] Start updating GEO database")
 
-	if updatingGeo.Load() {
+	if !updatingGeo.CompareAndSwap(false, true) {
 		return ErrGetDatabaseUpdateSkip
 	}
 
-	updatingGeo.Store(true)
 	defer updatingGeo.Store(false)
 
 	log.Infoln("[GEO] Updating GEO database")

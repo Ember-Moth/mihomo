@@ -2,22 +2,28 @@ package auth
 
 import (
 	"github.com/metacubex/mihomo/component/auth"
+	"sync"
 )
 
 type authStore struct {
+	mu            sync.RWMutex
 	authenticator auth.Authenticator
 }
 
 func (a *authStore) Authenticator() auth.Authenticator {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	return a.authenticator
 }
 
 func (a *authStore) SetAuthenticator(authenticator auth.Authenticator) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.authenticator = authenticator
 }
 
 func NewAuthStore(authenticator auth.Authenticator) auth.AuthStore {
-	return &authStore{authenticator}
+	return &authStore{authenticator: authenticator}
 }
 
 var Default auth.AuthStore = NewAuthStore(nil)

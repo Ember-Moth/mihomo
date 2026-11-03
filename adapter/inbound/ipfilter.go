@@ -3,6 +3,7 @@ package inbound
 import (
 	"net"
 	"net/netip"
+	"slices"
 
 	C "github.com/metacubex/mihomo/constant"
 )
@@ -11,19 +12,27 @@ var lanAllowedIPs []netip.Prefix
 var lanDisAllowedIPs []netip.Prefix
 
 func SetAllowedIPs(prefixes []netip.Prefix) {
-	lanAllowedIPs = prefixes
+	accessMu.Lock()
+	defer accessMu.Unlock()
+	lanAllowedIPs = slices.Clone(prefixes)
 }
 
 func SetDisAllowedIPs(prefixes []netip.Prefix) {
-	lanDisAllowedIPs = prefixes
+	accessMu.Lock()
+	defer accessMu.Unlock()
+	lanDisAllowedIPs = slices.Clone(prefixes)
 }
 
 func AllowedIPs() []netip.Prefix {
-	return lanAllowedIPs
+	accessMu.RLock()
+	defer accessMu.RUnlock()
+	return slices.Clone(lanAllowedIPs)
 }
 
 func DisAllowedIPs() []netip.Prefix {
-	return lanDisAllowedIPs
+	accessMu.RLock()
+	defer accessMu.RUnlock()
+	return slices.Clone(lanDisAllowedIPs)
 }
 
 func IsRemoteAddrDisAllowed(addr net.Addr) bool {
@@ -33,15 +42,9 @@ func IsRemoteAddrDisAllowed(addr net.Addr) bool {
 	}
 	ipAddr := m.AddrPort().Addr()
 	if ipAddr.IsValid() {
-		return isAllowed(ipAddr) && !isDisAllowed(ipAddr)
+		accessMu.RLock()
+		defer accessMu.RUnlock()
+		return prefixesContains(lanAllowedIPs, ipAddr) && !prefixesContains(lanDisAllowedIPs, ipAddr)
 	}
 	return false
-}
-
-func isAllowed(addr netip.Addr) bool {
-	return prefixesContains(lanAllowedIPs, addr)
-}
-
-func isDisAllowed(addr netip.Addr) bool {
-	return prefixesContains(lanDisAllowedIPs, addr)
 }

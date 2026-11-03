@@ -26,14 +26,14 @@ func naiveDNSResolver(prefer C.DNSPrefer) func(context.Context, *dns.Msg) *dns.M
 			response.Rcode = dns.RcodeNotImplemented
 			return response
 		}
-		if question.Qtype == dns.TypeAAAA && (resolver.DisableIPv6 || prefer == C.IPv4Only) || question.Qtype == dns.TypeA && prefer == C.IPv6Only {
+		if question.Qtype == dns.TypeAAAA && (resolver.DisableIPv6.Load() || prefer == C.IPv4Only) || question.Qtype == dns.TypeA && prefer == C.IPv6Only {
 			return response
 		}
 		domain := strings.TrimSuffix(question.Name, ".")
 		query := request.Copy()
 		var alias string
 		if question.Qtype == dns.TypeA || question.Qtype == dns.TypeAAAA {
-			if host, ok := resolver.DefaultHosts.Search(domain, false); ok {
+			if host, ok := resolver.DefaultHosts.Load().Search(domain, false); ok {
 				for _, address := range host.IPs {
 					address = address.Unmap()
 					header := dns.RR_Header{Name: question.Name, Rrtype: question.Qtype, Class: dns.ClassINET, Ttl: 60}
@@ -45,7 +45,7 @@ func naiveDNSResolver(prefer C.DNSPrefer) func(context.Context, *dns.Msg) *dns.M
 				}
 				return response
 			}
-			if host, ok := resolver.DefaultHosts.Search(domain, true); ok {
+			if host, ok := resolver.DefaultHosts.Load().Search(domain, true); ok {
 				alias = dns.Fqdn(host.Domain)
 				query.Question[0].Name = alias
 			}
@@ -53,9 +53,9 @@ func naiveDNSResolver(prefer C.DNSPrefer) func(context.Context, *dns.Msg) *dns.M
 		// Resolve proxy hosts through the proxy resolver, never the DNS service
 		// that returns Fake-IP addresses to applications. Read it at query time
 		// because config loading constructs outbounds before replacing DNS state.
-		r := resolver.ProxyServerHostResolver
+		r := resolver.ProxyServerHostResolver.Load()
 		if r == nil || !r.Invalid() {
-			r = resolver.SystemResolver
+			r = resolver.SystemResolver.Load()
 		}
 		if r == nil {
 			response.Rcode = dns.RcodeServerFailure
