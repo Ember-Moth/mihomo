@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/metacubex/mihomo/log"
+	"github.com/metacubex/mihomo/pkg/nowhere"
 )
 
 // ConvertsV2Ray convert V2Ray subscribe proxies data to mihomo proxies config
@@ -34,6 +35,16 @@ func ConvertsV2Ray(buf []byte) ([]map[string]any, error) {
 
 		scheme = strings.ToLower(scheme)
 		switch scheme {
+		case "nowhere":
+			link, err := nowhere.ParseShareLink(line)
+			if err != nil {
+				continue
+			}
+			proxies = append(proxies, map[string]any{
+				"name": uniqueName(names, link.Name), "type": "nowhere",
+				"server": link.Server, "port": int(link.Port), "password": link.SharedKey,
+				"network": link.Network, "morph": link.Morph, "sni": link.SNI, "pin": link.Pin, "udp": true,
+			})
 		case "hysteria":
 			urlHysteria, err := url.Parse(line)
 			if err != nil {

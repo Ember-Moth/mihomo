@@ -1,0 +1,75 @@
+name: Nowhere
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [Alpha]
+  pull_request:
+    branches: [Alpha]
+
+permissions:
+  contents: read
+
+jobs:
+  interop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            archive: nowhere-x86_64-unknown-linux-gnu.tar.gz
+            sha256: 97e17ffa5f710df0f27e81739cf9acb129e1e5656096a654973b39d9be4d59ab
+          - os: macos-latest
+            archive: nowhere-aarch64-apple-darwin.tar.gz
+            sha256: 975f22565c9c3342ad7a45f973b7148a7bc361d76ca10fbe4e9f35c3e743c996
+          - os: windows-latest
+            archive: nowhere-x86_64-pc-windows-msvc.zip
+            sha256: 7d36201e2ed6ef47d61fd8209c1cc629ed87c8b650a91c8b1fa2ce02e41cc2be
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      CGO_ENABLED: 1
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version: '1.26'
+      - name: Download pinned reference server
+        env:
+          NOWHERE_ARCHIVE: ${{ matrix.archive }}
+          NOWHERE_SHA256: ${{ matrix.sha256 }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, pathlib, tarfile, urllib.request, zipfile
+          name = os.environ['NOWHERE_ARCHIVE']
+          directory = pathlib.Path(os.environ['RUNNER_TEMP']) / 'nowhere-reference'
+          directory.mkdir(parents=True, exist_ok=True)
+          archive = directory / name
+          urllib.request.urlretrieve('https://github.com/NodePassProject/Nowhere/releases/download/v3.3.0/' + name, archive)
+          if hashlib.sha256(archive.read_bytes()).hexdigest() != os.environ['NOWHERE_SHA256']:
+              raise SystemExit('Nowhere release archive checksum mismatch')
+          executable = 'nowhere.exe' if name.endswith('.zip') else 'nowhere'
+          output = directory / executable
+          if name.endswith('.zip'):
+              with zipfile.ZipFile(archive) as source:
+                  member = next(n for n in source.namelist() if pathlib.PurePosixPath(n).name == executable)
+                  output.write_bytes(source.read(member))
+          else:
+              with tarfile.open(archive) as source:
+                  member = next(m for m in source.getmembers() if pathlib.PurePosixPath(m.name).name == executable and m.isfile())
+                  output.write_bytes(source.extractfile(member).read())
+          output.chmod(0o755)
+          with open(os.environ['GITHUB_ENV'], 'a') as environment:
+              environment.write(f'NOWHERE_TEST_BINARY={output.resolve()}\n')
+          PY
+      - name: Protocol, adapter and Rust interoperability
+        run: |
+          go test -race ./pkg/nowhere/... -count=1 -timeout=3m
+          go test -race ./adapter ./adapter/outbound ./common/convert -run Nowhere -count=1 -timeout=3m
+      - name: Build ordinary core
+        env:
+          CGO_ENABLED: 0
+        run: go build -tags with_gvisor -o "${RUNNER_TEMP}/mihomo-nowhere" .

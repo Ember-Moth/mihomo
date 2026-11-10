@@ -376,6 +376,18 @@ dns:
 
 proxies: # socks5
 
+  # Nowhere NW3 / Vector outbound; see docs/nowhere.md.
+  # - name: nowhere
+  #   type: nowhere
+  #   server: portal.example.com
+  #   port: 2000
+  #   password: "0123456789abcdef0123456789abcdef" # replace with your shared key
+  #   network: tcp # tcp = TLS, udp = QUIC; both support TCP/UDP payloads
+  #   morph: true
+  #   udp: true
+  #   sni: portal.example.com
+  #   pin: "<SHA-256 leaf certificate fingerprint, 64 lowercase hex characters>"
+
   # NaiveProxy requires a build with the with_naive tag (see docs/naive.md).
   # - name: naive
   #   type: naive

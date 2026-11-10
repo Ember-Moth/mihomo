@@ -57,6 +57,7 @@ const (
 	GostRelay
 	Naive
 	VlessReverse
+	Nowhere
 )
 
 const (
@@ -208,6 +209,8 @@ func (at AdapterType) String() string {
 		return "Http"
 	case Naive:
 		return "Naive"
+	case Nowhere:
+		return "Nowhere"
 	case Vmess:
 		return "Vmess"
 	case Vless:

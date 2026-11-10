@@ -32,6 +32,8 @@
 
 NaiveProxy outbound is available in this fork with the `with_naive` build tag. See [Naive configuration and builds](docs/naive.md).
 
+Nowhere NW3 outbound (TLS/QUIC, TCP/UDP and Morph) is included in ordinary builds. See [Nowhere configuration and interoperability](docs/nowhere.md).
+
 ## Dashboard
 
 A web dashboard with first-class support for this project has been created; it can be checked out at [metacubexd](https://github.com/MetaCubeX/metacubexd).

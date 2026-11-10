@@ -62,6 +62,13 @@ func ParseProxy(mapping map[string]any, options ...ProxyOption) (C.Proxy, error)
 			break
 		}
 		proxy, err = outbound.NewNaive(*naiveOption)
+	case "nowhere":
+		nowhereOption := &outbound.NowhereOption{BasicOption: basicOption}
+		err = decoder.Decode(mapping, nowhereOption)
+		if err != nil {
+			break
+		}
+		proxy, err = outbound.NewNowhere(*nowhereOption)
 	case "vmess":
 		vmessOption := &outbound.VmessOption{BasicOption: basicOption}
 		err = decoder.Decode(mapping, vmessOption)
